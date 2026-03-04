@@ -1,7 +1,8 @@
 import tkinter as tk
 from tkinter import messagebox
 from datetime import datetime
-import os
+import socket
+import json
 
 # Цвета для тёмной темы
 DARK_BG = "#2b2b2b"
@@ -28,7 +29,7 @@ LIGHT_BUTTON_ACTIVE = "#d5d5d5"
 dark_mode = True
 
 # Создание лог
-LOG_FILE = datetime.now().strftime("%Y-%m-%d") + "txt"
+LOG_FILE = datetime.now().strftime("%Y-%m-%d") + ".txt"
 
 def log_action(action, task_text=""):
     """Записывает действие в лог-файл с временной меткой."""
@@ -69,8 +70,12 @@ def apply_theme():
     counter_label.config(bg=bg_color, fg=fg_color)
     frame_list.config(bg=bg_color)
 
-    for btn in [btn_add, btn_mark, btn_delete, btn_exit, btn_toggle_theme]:
+    for btn in [btn_add, btn_mark, btn_delete, btn_exit, btn_toggle_theme, btn_load, btn_send]:
         btn.config(bg=button_bg, fg=button_fg, activebackground=button_active)
+
+    frame_sync.config(bg=bg_color)
+    label_ip.config(bg=bg_color, fg=fg_color)
+    entry_server_ip.config(bg=entry_bg, fg=entry_fg, insertbackground=fg_color)
 
 def toggle_theme():
     global dark_mode
@@ -143,6 +148,55 @@ def mark_completed():
     except IndexError:
         messagebox.showwarning("Предупреждение", "Выберите задачу.")
 
+SERVER_PORT = 5000
+
+def load_from_server():
+    """Запрашивает список задач с сервера и обновляет локальный."""
+    server_ip = entry_server_ip.get().strip()
+    if not server_ip:
+        messagebox.showwarning("Предупреждение", "Введите IP сервера")
+        return
+    try:
+        client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        client.connect((server_ip, SERVER_PORT))
+        client.sendall("GET".encode('utf-8'))
+        data = client.recv(65536).decode('utf-8')
+        tasks = json.loads(data)
+        update_listbox_from_list(tasks)
+        messagebox.showinfo("Синхронизация", "Список загружен с сервера")
+    except Exception as e:
+        messagebox.showerror("Ошибка", f"Не удалось подключиться к серверу: {e}")
+    finally:
+        client.close()
+
+def send_to_server():
+    """Отправляет текущий локальный список на сервер."""
+    server_ip = entry_server_ip.get().strip()
+    if not server_ip:
+        messagebox.showwarning("Предупреждение", "Введите IP сервера")
+        return
+    try:
+        local_tasks = list(listbox_tasks.get(0, tk.END))
+        data = "SET:" + json.dumps(local_tasks, ensure_ascii=False)
+        client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        client.connect((server_ip, SERVER_PORT))
+        client.sendall(data.encode('utf-8'))
+        response = client.recv(65536).decode('utf-8')
+        updated_tasks = json.loads(response)
+        update_listbox_from_list(updated_tasks)
+        messagebox.showinfo("Синхронизация", "Список отправлен и обновлён")
+    except Exception as e:
+        messagebox.showerror("Ошибка", f"Не удалось отправить: {e}")
+    finally:
+        client.close()
+
+def update_listbox_from_list(task_list):
+    """Заменяет содержимое listbox на переданный список (вызывать в главном потоке)."""
+    listbox_tasks.delete(0, tk.END)
+    for task in task_list:
+        listbox_tasks.insert(tk.END, task)
+    update_counter()
+
 # Создание главного окна
 root = tk.Tk()
 root.title("Список дел")
@@ -190,6 +244,25 @@ counter_label.pack(pady=10)
 # Кнопка переключения темы
 btn_toggle_theme = tk.Button(root, text="Переключить тему", command=toggle_theme)
 btn_toggle_theme.pack(pady=2)
+
+# Рамка для синхронизации
+frame_sync = tk.Frame(root)
+frame_sync.pack(pady=5)
+
+# Кнопки синхронизации с сервером
+btn_load = tk.Button(frame_sync, text="Загрузить", command=load_from_server)
+btn_load.pack(side=tk.LEFT, padx=2)
+
+btn_send = tk.Button(frame_sync, text="Отправить", command=send_to_server)
+btn_send.pack(side=tk.LEFT, padx=2)
+
+label_ip = tk.Label(frame_sync, text="IP сервера:")
+label_ip.pack(side=tk.LEFT, padx=5)
+
+entry_server_ip = tk.Entry(frame_sync, width=15)
+entry_server_ip.insert(0, "192.168.1.100")  # пример
+entry_server_ip.pack(side=tk.LEFT, padx=5)
+
 
 # Выход
 btn_exit = tk.Button(root, text="Выход", command=root.quit)
