@@ -4,7 +4,7 @@ import json
 import os
 
 HOST = '0.0.0.0'   # слушаем все интерфейсы
-PORT = 5000
+PORT = 17789
 TASKS_FILE = 'tasks.json'
 
 # Загружаем задачи из файла при старте
