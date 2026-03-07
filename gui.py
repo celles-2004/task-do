@@ -76,6 +76,7 @@ def apply_theme():
     frame_sync.config(bg=bg_color)
     label_ip.config(bg=bg_color, fg=fg_color)
     entry_server_ip.config(bg=entry_bg, fg=entry_fg, insertbackground=fg_color)
+    chk_auto_sync.config(bg=bg_color, fg=fg_color, selectcolor=button_bg, activebackground=button_active)
 
 def toggle_theme():
     global dark_mode
@@ -148,7 +149,8 @@ def mark_completed():
     except IndexError:
         messagebox.showwarning("Предупреждение", "Выберите задачу.")
 
-SERVER_PORT = 5000
+SERVER_PORT = 17779
+auto_sync_enabled = False
 
 def load_from_server():
     """Запрашивает список задач с сервера и обновляет локальный."""
@@ -197,12 +199,45 @@ def update_listbox_from_list(task_list):
         listbox_tasks.insert(tk.END, task)
     update_counter()
 
+def toggle_auto_sync():
+    global auto_sync_enabled
+    auto_sync_enabled = auto_sync_var.get()
+    if auto_sync_enabled:
+        auto_sync()  # запускаем цикл
+
+def auto_sync():
+    if not auto_sync_enabled:
+        return
+    client = None
+    try:
+        server_ip = entry_server_ip.get().strip()
+        if server_ip:
+            client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            client.settimeout(5)
+            client.connect((server_ip, SERVER_PORT))
+            client.sendall("GET".encode('utf-8'))
+            data = client.recv(65536).decode('utf-8')
+            tasks = json.loads(data)
+            current_tasks = list(listbox_tasks.get(0, tk.END))
+            if tasks != current_tasks:
+                update_listbox_from_list(tasks)
+    except Exception:
+        pass  # игнорируем ошибки сети
+    finally:
+        if client:
+            client.close()
+        if auto_sync_enabled:
+            root.after(10000, auto_sync)
+
 # Создание главного окна
 root = tk.Tk()
 root.title("Список дел")
 root.update_idletasks()
 root.geometry('')
 root.resizable(True, True)
+
+# Запускаем автосинхронизацию после создания окна
+root.after(10000, auto_sync)
 
 # Поле ввода
 entry_task = tk.Entry(root, width=40)
@@ -260,9 +295,13 @@ label_ip = tk.Label(frame_sync, text="IP сервера:")
 label_ip.pack(side=tk.LEFT, padx=5)
 
 entry_server_ip = tk.Entry(frame_sync, width=15)
-entry_server_ip.insert(0, "192.168.1.100")  # пример
+entry_server_ip.insert(0, "192.168.1.40")
 entry_server_ip.pack(side=tk.LEFT, padx=5)
 
+# Чекбокс авто-синхронизации
+auto_sync_var = tk.BooleanVar(value=False)
+chk_auto_sync = tk.Checkbutton(frame_sync, text="Авто", variable=auto_sync_var, command=toggle_auto_sync)
+chk_auto_sync.pack(side=tk.LEFT, padx=5)
 
 # Выход
 btn_exit = tk.Button(root, text="Выход", command=root.quit)
