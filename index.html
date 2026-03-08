@@ -214,9 +214,14 @@
             const text = input.value.trim();
             if (!text) return;
 
-            // Добавляем задачу с текущий датой (как в детскопной версии)
+            // Формируем метку времени в формате YYYY-MM-DD HH:MM (как в gui)
             const now = new Date();
-            const timestamp = now.toLocaleDateString('ru-RU') + ' ' + now.toLocaleTimeString('ru-RU', {hour: '2-digit', minute:'2-digit'});
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const timestamp = `${year}-${month}-${day} ${hours}:${minutes}`;
             const fullTask = `[${timestamp}] ${text}`;
 
             const tasks = await (await fetch(API_URL)).json();

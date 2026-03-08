@@ -36,4 +36,4 @@ def update_tasks():
     return jsonify({'status': 'error', 'message': 'Invalid data'}), 400
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=17779, debug=True)
+    app.run(host='0.0.0.0', port=17789, debug=True)
