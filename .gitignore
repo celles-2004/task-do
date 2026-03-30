@@ -35,11 +35,12 @@ Thumbs.db
 # Windows
 desktop.ini
 
+# Android
+android/
+
 # PyInstaller
 *.spec
 
-# Json
-voice_chat_config.json
 
 # Bat
 git_update.bat

@@ -56,7 +56,6 @@ def get_day_list_file():
     return os.path.join(get_today_dir(), f"{get_today_str()} list per day.txt")
 
 def get_total_count_file():
-    # общий счётчик храним в корне (или можно в BASE_DIR)
     return os.path.join(BASE_DIR, "total_count.txt")
 
 # --- Инициализация и проверка нового дня ---
@@ -64,74 +63,60 @@ def check_new_day():
     """Если день сменился, очистить список и сбросить счётчики."""
     global day_count, total_count
     today = get_today_str()
-    # Проверяем, существует ли папка сегодняшнего дня
     if not os.path.exists(get_today_dir()):
-        # Новый день: очищаем список и tasks.json
         clear_task_list()
-        # Счётчики будут перечитаны из свежих файлов (они равны 0)
         read_counters_from_files()
-        # Обновляем интерфейс
         update_action_counters()
-        update_counter()
 
 def clear_task_list():
     """Очистить список задач в интерфейсе и в tasks.json."""
     listbox_tasks.delete(0, tk.END)
-    save_local_tasks()  # tasks.json станет пустым
+    save_local_tasks()
+    update_day_list_file()
 
 def read_counters_from_files():
     """Прочитать счётчики из файлов сегодняшнего дня (или создать)."""
     global day_count, total_count
-    # Дневной счётчик
     try:
         with open(get_day_count_file(), "r", encoding="utf-8") as f:
             day_count = int(f.read().strip())
     except FileNotFoundError:
         day_count = 0
-        with open(get_day_count_file(), "w", encoding="utf-8") as f:
-            f.write(f"{day_count:03d}")
+        save_counters()
 
-    # Общий счётчик
     try:
         with open(get_total_count_file(), "r", encoding="utf-8") as f:
             total_count = int(f.read().strip())
     except FileNotFoundError:
         total_count = 0
-        with open(get_total_count_file(), "w", encoding="utf-8") as f:
-            f.write(f"{total_count:04d}")
+        save_counters()
 
-def update_action_counters():
-    day_counter_label.config(text=f"Действий сегодня: {day_count:03d}")
-    total_counter_label.config(text=f"Всего действий: {total_count:04d}")
-
-def log_action(task_text, increment=True):
-    """
-    Записывает действие в лог-файл дня.
-    Если increment=True – увеличивает счётчики, иначе уменьшает.
-    """
-    global day_count, total_count
-    now = datetime.now()
-    time_str = now.strftime("%H:%M")
-
-    # Запись в дневной список действий
-    with open(get_day_list_file(), "a", encoding="utf-8") as f:
-        f.write(f"{time_str} {task_text}\n")
-
-    # Обновление счётчиков
-    if increment:
-        day_count += 1
-        total_count += 1
-    else:
-        day_count = max(0, day_count - 1)
-        total_count = max(0, total_count - 1)
-
-    # Сохраняем новые значения в файлы
+def save_counters():
+    """Сохраняет текущие значения счётчиков в файлы."""
     with open(get_day_count_file(), "w", encoding="utf-8") as f:
         f.write(f"{day_count:03d}")
     with open(get_total_count_file(), "w", encoding="utf-8") as f:
         f.write(f"{total_count:04d}")
 
+def update_action_counters():
+    day_counter_label.config(text=f"Действий сегодня: {day_count:03d}")
+    total_counter_label.config(text=f"Всего действий: {total_count:04d}")
+
+def recalc_day_count():
+    """Пересчитывает day_count как количество задач с сегодняшней датой."""
+    global day_count
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    tasks = list(listbox_tasks.get(0, tk.END))
+    day_count = sum(1 for task in tasks if task.startswith(today_str))
+    save_counters()
     update_action_counters()
+
+def update_day_list_file():
+    """Перезаписать файл списка задач за сегодня актуальным списком из listbox."""
+    tasks = list(listbox_tasks.get(0, tk.END))
+    with open(get_day_list_file(), "w", encoding="utf-8") as f:
+        for task in tasks:
+            f.write(task + "\n")
 
 # --- Работа с tasks.json ---
 def save_local_tasks():
@@ -144,22 +129,34 @@ def load_local_tasks():
         try:
             with open(LOCAL_TASKS_FILE, "r", encoding="utf-8") as f:
                 tasks = json.load(f)
+            if not isinstance(tasks, list):
+                messagebox.showerror("Ошибка", f"Файл {LOCAL_TASKS_FILE} содержит некорректные данные.")
+                return
             update_listbox_from_list(tasks)
+            recalc_day_count()  # day_count пересчитывается
         except Exception as e:
             messagebox.showerror("Ошибка", f"Не удалось загрузить задачи: {e}")
 
 # --- Обработчики кнопок ---
 def add_task(event=None):
-    check_new_day()  # возможно, уже новый день
+    check_new_day()
     task = entry_task.get().strip()
     if task:
-        timestamp = datetime.now().strftime("%H:%M")
-        full_task = f"{timestamp} {task}"
+        now = datetime.now()
+        date_str = now.strftime("%Y-%m-%d")
+        time_str = now.strftime("%H:%M")
+        full_task = f"{date_str} {time_str} {task}"
         listbox_tasks.insert(tk.END, full_task)
         entry_task.delete(0, tk.END)
-        update_counter()
-        log_action(task, increment=True)  # увеличиваем счётчики
+
+        global day_count, total_count
+        day_count += 1
+        total_count += 1
+        save_counters()
+
         save_local_tasks()
+        update_day_list_file()
+        update_action_counters()
     else:
         messagebox.showwarning("", "Введите название задачи.")
 
@@ -168,24 +165,25 @@ def delete_task():
     try:
         selected_index = listbox_tasks.curselection()[0]
         task = listbox_tasks.get(selected_index)
-
-        # Извлекаем чистый текст (без времени)
-        parts = task.split(' ', 1)
-        clean_task = parts[1] if len(parts) > 1 else task
+        task_date = task[:10]  # YYYY-MM-DD
+        today_str = datetime.now().strftime("%Y-%m-%d")
 
         listbox_tasks.delete(selected_index)
-        update_counter()
-        log_action(clean_task, increment=False)  # уменьшаем счётчики
+
+        global day_count, total_count
+        if task_date == today_str:
+            day_count = max(0, day_count - 1)
+            # total_count не меняется
+            save_counters()
+
         save_local_tasks()
+        update_day_list_file()
+        update_action_counters()
     except IndexError:
         messagebox.showwarning("Предупреждение", "Выберите задачу для удаления.")
 
-def update_counter():
-    total = listbox_tasks.size()
-    counter_label.config(text=f"Всего задач: {total}")
-
 # --- Синхронизация с сервером ---
-SERVER_PORT = 17779
+SERVER_PORT = 17789
 auto_sync_enabled = False
 
 def load_from_server():
@@ -199,10 +197,15 @@ def load_from_server():
         client.sendall("GET".encode('utf-8'))
         data = client.recv(65536).decode('utf-8')
         tasks = json.loads(data)
+        if not isinstance(tasks, list):
+            messagebox.showerror("Ошибка", "Сервер вернул некорректные данные.")
+            return
         update_listbox_from_list(tasks)
         messagebox.showinfo("Синхронизация", "Список загружен с сервера")
         save_local_tasks()
-        check_new_day()  # после загрузки тоже проверим день
+        recalc_day_count()  # обновляем day_count, total не трогаем
+        update_day_list_file()
+        check_new_day()
     except Exception as e:
         messagebox.showerror("Ошибка", f"Не удалось подключиться к серверу: {e}")
     finally:
@@ -224,6 +227,8 @@ def send_to_server():
         update_listbox_from_list(updated_tasks)
         messagebox.showinfo("Синхронизация", "Список отправлен и обновлён")
         save_local_tasks()
+        recalc_day_count()  # обновляем day_count, total не трогаем
+        update_day_list_file()
         check_new_day()
     except Exception as e:
         messagebox.showerror("Ошибка", f"Не удалось отправить: {e}")
@@ -234,7 +239,6 @@ def update_listbox_from_list(task_list):
     listbox_tasks.delete(0, tk.END)
     for task in task_list:
         listbox_tasks.insert(tk.END, task)
-    update_counter()
 
 def toggle_auto_sync():
     global auto_sync_enabled
@@ -255,10 +259,14 @@ def auto_sync():
             client.sendall("GET".encode('utf-8'))
             data = client.recv(65536).decode('utf-8')
             tasks = json.loads(data)
+            if not isinstance(tasks, list):
+                return
             current_tasks = list(listbox_tasks.get(0, tk.END))
             if tasks != current_tasks:
                 update_listbox_from_list(tasks)
                 save_local_tasks()
+                recalc_day_count()  # обновляем day_count
+                update_day_list_file()
                 check_new_day()
     except Exception:
         pass
@@ -268,7 +276,7 @@ def auto_sync():
         if auto_sync_enabled:
             root.after(10000, auto_sync)
 
-# --- Тема ---
+# --- Тема (без изменений) ---
 def apply_theme():
     global dark_mode
     if dark_mode:
@@ -295,7 +303,6 @@ def apply_theme():
     root.config(bg=bg_color)
     entry_task.config(bg=entry_bg, fg=entry_fg, insertbackground=fg_color)
     listbox_tasks.config(bg=list_bg, fg=list_fg, selectbackground=button_active)
-    counter_label.config(bg=bg_color, fg=fg_color)
     day_counter_label.config(bg=bg_color, fg=fg_color)
     total_counter_label.config(bg=bg_color, fg=fg_color)
     frame_list.config(bg=bg_color)
@@ -348,9 +355,6 @@ scrollbar.config(command=listbox_tasks.yview)
 btn_delete = tk.Button(root, text="Удалить действие", command=delete_task)
 btn_delete.pack(pady=2)
 
-counter_label = tk.Label(root, text="Всего задач: 0", font=("Arial", 10))
-counter_label.pack(pady=5)
-
 day_counter_label = tk.Label(root, text="000", font=("Arial", 10))
 day_counter_label.pack()
 total_counter_label = tk.Label(root, text="0000", font=("Arial", 10))
@@ -372,7 +376,7 @@ label_ip = tk.Label(frame_sync, text="IP сервера:")
 label_ip.pack(side=tk.LEFT, padx=5)
 
 entry_server_ip = tk.Entry(frame_sync, width=15)
-entry_server_ip.insert(0, "85.88.175.242")
+entry_server_ip.insert(0, "192.168.1.40")
 entry_server_ip.pack(side=tk.LEFT, padx=5)
 
 auto_sync_var = tk.BooleanVar(value=False)
@@ -383,10 +387,10 @@ btn_exit = tk.Button(root, text="Выход", command=root.quit)
 btn_exit.pack(pady=5)
 
 apply_theme()
-read_counters_from_files()   # инициализация счётчиков из папки сегодняшнего дня
-check_new_day()              # проверим, не начался ли новый день (очистим список, если да)
-load_local_tasks()           # загружаем задачи из tasks.json (они уже могут быть пусты, если день новый)
+read_counters_from_files()
+check_new_day()
+load_local_tasks()
 update_action_counters()
-update_counter()
+update_day_list_file()
 
 root.mainloop()
