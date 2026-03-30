@@ -35,12 +35,8 @@ Thumbs.db
 # Windows
 desktop.ini
 
-# Android
-android/
-
 # PyInstaller
 *.spec
-
 
 # Bat
 git_update.bat
