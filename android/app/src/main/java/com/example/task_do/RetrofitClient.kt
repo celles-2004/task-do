@@ -4,14 +4,24 @@ import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 
 object RetrofitClient {
-    // Замените IP на адрес вашего компьютера в локальной сети
-    private const val BASE_URL = "http://192.168.1.40:17789/"
+    private var currentBaseUrl = "http://192.168.1.40:17789/"
+    private var retrofit: Retrofit? = null
+    private var api: TaskApi? = null
 
-    val instance: TaskApi by lazy {
-        Retrofit.Builder()
-            .baseUrl(BASE_URL)
-            .addConverterFactory(GsonConverterFactory.create())
-            .build()
-            .create(TaskApi::class.java)
+    fun getInstance(): TaskApi {
+        if (api == null || retrofit?.baseUrl().toString() != currentBaseUrl) {
+            retrofit = Retrofit.Builder()
+                .baseUrl(currentBaseUrl)
+                .addConverterFactory(GsonConverterFactory.create())
+                .build()
+            api = retrofit?.create(TaskApi::class.java)
+        }
+        return api!!
+    }
+
+    fun setBaseUrl(newUrl: String) {
+        currentBaseUrl = newUrl
+        retrofit = null
+        api = null
     }
 }
