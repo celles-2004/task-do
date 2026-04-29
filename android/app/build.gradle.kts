@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "com.example.task.do"
-    compileSdk = 34   // используем 34, так как 36 может не быть в SDK
+    namespace = "com.example.task_do"
+    compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.example.task.do"
+        applicationId = "com.example.task_do"
         minSdk = 24
         targetSdk = 34
         versionCode = 1
@@ -56,6 +56,7 @@ dependencies {
     implementation("androidx.room:room-ktx:2.6.1")
     ksp("androidx.room:room-compiler:2.6.1")
 
+    // Testing
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
